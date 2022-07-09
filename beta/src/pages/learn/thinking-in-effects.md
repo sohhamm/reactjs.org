@@ -4,90 +4,149 @@ title: 'Thinking in Effects'
 
 <Intro>
 
-When you pass an event handler to JSX, you explicitly specify which event it runs in response to. But when you write an Effect, it's the code *inside* the Effect that determines when it runs. Writing Effects requires you to think in a different mindset. This page will help you grasp it.
+The code inside your Effect will re-run after any change to the values that your Effect depends on. This is why you need to approach writing Effects with a different mindset than writing event handlers. You will always start by writing the code inside your Effect first. Then you'll specify its dependencies according to the code you already wrote. Finally, if some dependency changes too often and causes your Effect to re-run more often than necessary, you'll have to adjust the code so that it *does not need* that dependency, and then follow the same steps again. It's not always obvious how to do this, so this page will help you learn common patterns and idioms.
 
 </Intro>
 
 <YouWillLearn>
 
-- When Effects fire
-- How to think about writing and editing Effects
-- How to choose Effect dependencies
-- What an empty dependency array means
-- What's a dependency lint error and how to fix it
-- How to fix an Effect that fires too often
+- How writing Effects is different from writing event handlers
+- What causes Effects to re-run
+- How to choose the Effect dependencies
+- How the fix the dependency linter errors
+- How to prevent Effects from re-running too often
 
 </YouWillLearn>
 
-## Events vs Effects {/*events-vs-effects*/}
+## Effects are reactive {/*effects-are-reactive*/}
 
-To understand Effects, it helps to compare and contrast them with event handlers.
+Event handlers and Effects [serve different purposes.](/learn/synchronizing-with-effects#what-are-effects-and-how-are-they-different-from-events) An event handler lets you respond to a specific interaction. An Effect lets your component stay synchronized with an external system. This is why they behave differently:
 
-Event handlers let you handle particular interactions. For example, clicking an "Open chat" button needs to make the chat appear on the screen. After you write that event handler, you always explicitly specify *which* interaction it handles. To do this, you pass your handler to an element in your JSX, like `<button onClick={handleClick}`:
+* An event handler runs exactly once per interaction. If you click a button once, its click handler will run once.
+* **An Effect re-runs after any change to the values it depends on.** For example, say your Effect connects to the chat room specified by the `roomId` prop. Then you must include `roomId` [in your Effect's dependencies](/learn/synchronizing-with-effects#step-2-specify-the-effect-dependencies). When your component is added to the screen, your Effect will *run*, connecting to the room with the initial `roomId`. When it receives a different `roomId`, your Effect will *[clean up](/learn/synchronizing-with-effects#step-3-add-cleanup-if-needed)* (disconnecting from the previous room) and *run* again (connecting to the next room). When your component is removed, the Effect will *clean up* one last time.
+
+**In other words, Effects are _reactive._** They "react" to the values from the component body (like props and state). This might remind you of how React always keeps the UI synchronized to the current props and state of your component. By writing Effects, you teach React to synchronize *other* systems to the current props and state.
+
+**Writing reactive code like Effects requires a different mindset.** The most common problem you'll run into is that your Effect re-runs too often because a dependency you use inside of it changes too often. Your first instinct might be to omit that dependency from the list, but that's wrong. What you need to do in these cases is to edit the *rest* of the code to *not need* that dependency. On this page, you'll learn the most common ways to do that.
+
+### Event handlers run on specific interactions {/*event-handlers-run-on-specific-interactions*/}
+
+This `ChatRoom` component contains an event handler that sends a chat message:
 
 ```js
-function handleClick() {
-  setActiveTab('chat');
-  post('/analytics', { name: 'chat_button_clicked' });
+function ChatRoom() {
+  // ...
+  function handleSendClick() {
+    sendMessage(message);
+  }
+  // ...
 }
+```
 
-// ... somewhere in the JSX ...
-<button onClick={handleClick}>
-  Open chat
+Imagine you want to find out what causes this event handler to run. You can't tell that by looking at the code *inside* the event handler. You would need to look for where this event handler *is being passed* to the JSX:
+
+```js
+<button onClick={handleSendClick}>
+  Send
 </button>
 ```
 
-With Effects, it's the other way around. It's the code *inside* the Effect that determines when your Effect will run. This page will help you grasp this way of thinking. This shift in perspective is crucial to understanding Effects.
+The snippet above tells you that the `handleSendClick` function runs when the user presses the "Send" button. This event handler is written for *this particular interaction.* If the `handleSendClick` function isn't passed or called anywhere else, you can be certain that it *only* runs when the user clicks this particular "Send" button.
 
-## Effects "react" to values like props and state {/*effects-react-to-values-like-props-and-state*/}
+What happens when you edit the event handler? Let's say you're adding a `roomId` prop to the `ChatRoom` component. Then you read the current value of `roomId` inside your event handler:
 
-This Effect keeps the `ChatRoom` component connected to a chat server:
+```js {1,4}
+function ChatRoom({ roomId }) {
+  // ...
+  function handleSendClick() {
+    sendMessage(roomId, message);
+  }
+  // ...
+}
+```
+
+Although you edited the code *inside* the `handleSendClick` event handler, this doesn't change when it runs. It still runs only when the user clicks the "Send" button. **Editing the event handler does not make it run any less or more often.** In other words, the code inside event handlers isn't reactive--it doesn't re-run automatically.
+
+### Effects run whenever synchronization is needed {/*effects-run-whenever-synchronization-is-needed*/}
+
+In the same `ChatRoom` component, there is an Effect that sets up the chat server connection:
 
 ```js
+function ChatRoom() {
+  // ...
+  useEffect(() => {
+    const connection = createConnection();
+    connection.connect();
+    return () => {
+      connection.disconnect();
+    };
+  }, []);
+  // ...
+}
+```
+
+It dependencies are an empty `[]` array, so this Effect only runs "on mount," i.e. when the component is added to the screen. (Note there'll still be an extra `connect()` and `disconnect()` call pair in development, [here's why.](/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development))
+
+Now let's see what happens when you add a `roomId` prop and start using it inside your Effect:
+
+```js {1,4}
+function ChatRoom({ roomId }) {
+  // ...
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    // ...
+}
+```
+
+If you only change these two lines, you will introduce a bug. The `ChatRoom` component will connect to the initial `roomId` correctly. However, when the user picks a different room, nothing will happen. Can you guess why?
+
+If your linter is [correctly configured for React,](/learn/editor-setup#linting) it will point you directly to the bug:
+
+```js {6}
 function ChatRoom({ roomId }) {
   useEffect(() => {
     const connection = createConnection(roomId);
     connection.connect();
     return () => connection.disconnect();
-  }, [roomId]);
+  }, []); // 🔴 React Hook useEffect has a missing dependency: 'roomId'
   // ...
 }
 ```
 
-*(If this syntax looks unfamiliar, you might want to read [Synchronizing with Effects](/learn/synchronizing-with-effects) before reading this page.)*
+This looks like a React error, but really it's React pointing out a logical mistake in this code. As it's written now, this Effect is not "reacting" to the `roomId` prop. **Since your Effect now uses the `roomId` prop in its code, it no longer makes sense for it to run only "on mount."** The linter verifies that your dependencies match your code.
 
-Let's ask a similar question: when does this Effect run?
-
-The `[roomId]` dependency array specifies that this Effect *depends* on the `roomId`. In other words, it "reacts" to every value of the `roomId` prop. It runs when the component is added to the screen. Later, whenever the `roomId` prop changes, the previous Effect cleans up (and disconnects from the previous room), while the next Effect connects to the next room. This keeps the active connection synchronized with the value of the `roomId` prop.
-
-It would be technically correct to say that the dependency array determines when the Effect runs. However, it misses a very important nuance. **Conceptually, it's the code *inside* the Effect that determines when the Effect runs.** You don't write the code and then "choose" your dependencies. Instead, dependencies "follow the code:"
-
-1. You write or edit the code inside your Effect.
-2. You specify or edit the dependencies *according to the code inside your Effect*.
-3. The Effect runs *according to the dependencies you specified*.
-
-This means that when you edit your Effect's code, you'll usually need to update its dependencies. Conversely, when you're not happy with the *dependencies,* what you need to edit is the *code.* When you get familiar with both of these workflows, you will feel a lot more comfortable with writing Effects. Let's look at both of them.
-
-## Dependencies "follow the code" {/*dependencies-follow-the-code*/}
-
-First, you'll see how (and why) updating the code leads to updating the dependencies.
-
-Let's say you're adding a feature that the user pick a chat server. You're passing the selected server as a `serverUrl` prop to the `ChatRoom` component, so all that's left to do is to pass it along to `createConnection`:
-
-```js {1,3}
-function ChatRoom({ roomId, serverUrl }) {
-  useEffect(() => {
-    const connection = createConnection(serverUrl, roomId);
-    connection.connect();
-    // ...
-```
-
-If you only change these two lines, you will introduce a bug. The `ChatRoom` component will connect to the initial `serverUrl` correctly. Alas, when the user picks a different server in the dropdown, nothing will happen. However, as soon as they also pick a *different room,* the `ChatRoom` will reconnect. Can you guess why that happens?
-
-If your linter is [correctly configured for React,](/learn/editor-setup#linting) it will point you directly to the bug:
+To fix this bug, follow the linter's suggestion and add the missing `roomId` dependency:
 
 ```js {6}
-function ChatRoom({ roomId, serverUrl }) {
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+When your component mounts, your Effect will *run*, connecting to the room with the initial `roomId`. When it receives a different `roomId`, your Effect will *[clean up](/learn/synchronizing-with-effects#step-3-add-cleanup-if-needed)* (disconnecting from the previous room) and *run* again (connecting to the next room). When your component unmounts, the Effect will *clean up* one last time.
+
+Let's recap what has happened:
+
+1. You edited the code, potentially introducing a bug.
+2. The linter found the bug and suggested a change *to make the dependencies match the Effect code*.
+3. You accepted the linter's suggestion, which (correctly) *made your Effect run more often than before*.
+
+You'll go through a process like this every time you edit an Effect.
+
+### Every reactive value becomes a dependency {/*every-reactive-value-becomes-a-dependency*/}
+
+Imagine you're adding a way to choose the chat server, and read the server URL in your Effect:
+
+```js {3,6}
+function ChatRoom({ roomId, selectedServerUrl }) {
+  const { defaultServerUrl } = useContext(SettingsContext);
+  const serverUrl = selectedServerUrl ?? defaultServerUrl;
+
   useEffect(() => {
     const connection = createConnection(serverUrl, roomId);
     connection.connect();
@@ -97,12 +156,15 @@ function ChatRoom({ roomId, serverUrl }) {
 }
 ```
 
-This looks like a React error, but really it's React pointing out a logical mistake in this code. As it's written now, this Effect is only "reacting" to the `roomId` prop. Since only `roomId` is in the dependency array, React will skip re-running the Effect for renders with the same `roomId` as before. However, from the user's perspective, that is wrong. If you pick a different *server*, you'd *also* want to reconnect--even if the selected room hasn't changed!
+As the linter points out, this code has a bug. If the user selects a different server, nothing will happen. Also, if the user hasn't selected any server yet, but they change the default server in your app's Settings, nothing will happen either. In other words, your Effect uses a value that can change over time, but it ignores all updates to that value.
 
-To fix this bug, follow the linter's suggestion and add the missing `serverUrl` dependency:
+**Since the `serverUrl` variable is declared inside your component, it is a _reactive value._ It is recalculated on every render--whenever the props or state change. This is why you have to specify it as a dependency of your Effect:**
 
-```js {6}
-function ChatRoom({ roomId, serverUrl }) {
+```js {9}
+function ChatRoom({ roomId, selectedServerUrl }) {
+  const { defaultServerUrl } = useContext(SettingsContext);
+  const serverUrl = selectedServerUrl ?? defaultServerUrl;
+
   useEffect(() => {
     const connection = createConnection(serverUrl, roomId);
     connection.connect();
@@ -112,60 +174,20 @@ function ChatRoom({ roomId, serverUrl }) {
 }
 ```
 
-This Effect will first run when the `ChatRoom` is added to the screen. It will connect to the initial `serverUrl` and `roomId`. (In development, this will [happen twice](/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development) to help you find bugs.) After the `ChatRoom` component receives a different value of either `serverUrl` or `roomId`, **the Effect for the previous `roomId` and `serverUrl` will "clean up", disconnecting from that room, and the Effect for the next `roomId` and `serverUrl` will connect to the next room.** When the `ChatRoom` component is removed from the screen, it will disconnect from the last chat room.
+Now, your Effect will re-run more often. It will re-run not only when the user selects a different room, but also when they select a different server. And this is correct! This is what makes Effects reactive--**when you edit an Effect's code, you also change how often it runs.** This is how it stays synchronized to the latest props and state.
 
-More concisely, you could say that this Effect depends on `roomId` and `serverUrl`, so it "reacts" to their values (including the initial ones). Every time there's a different pair of `roomId` and `serverUrl`, it connects to the room. When it's time to clean up, it disconnects. That cycle repeats whenever either of the dependencies changes.
+## How to fix an Effect that re-runs too often? {/*how-to-fix-an-effect-that-re-runs-too-often*/}
 
-Let's recap what has happened:
+When your Effect uses a reactive value, you must include it in the dependencies. This may cause problems:
 
-1. You edited the code, potentially introducing a bug.
-2. The linter found the bug and suggested a change *to make the dependencies match the Effect code*.
-3. You accepted the linter's suggestion, which (correctly) *made your Effect run more often than before*.
+* Sometimes, you want to only read *the latest value* of some dependency instead of "reacting" to its changes.
+* Sometimes, you want to re-execute *different parts* of your Effect under different conditions.
+* Sometimes, a dependency may change too often *unintentionally* because it's an object or a function.
 
-Dependencies should always "follow the code". This ensures that your Effect's behavior doesn't fall out of sync with the props and state displayed in the user interface. Note that unlike with an event handler, it's hard for you to tell which interaction *caused* the Effect: it could be an "Open chat" button click, a "Choose server" dropdown select event, or a "Join room" button click. This should not be a problem because that's what Effects are for: they let you write synchronization logic that "reacts" to the props and state regardless of the exact user action.
+After you adjust the Effect's dependencies to reflect the code, you should always look at the dependency list. Does it make sense for the Effect to re-run when these dependencies change? Sometimes, the answer is "no."
 
-<DeepDive title="Should every variable referenced inside the Effect be a dependency?">
+**When this happens, your first instinct might be to omit some dependencies from the list, but that leads to subtle bugs that are very hard to diagnose. Instead, edit the *rest* of the code to *not need* that dependency.** It's not always obvious how to do this, so the rest of this page will introduce you to the most common scenarios.
 
-Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as props props, state, and any other variable that's directly inside the component and is used by the Effect:
+### Splitting the Effect in two {/*splitting-the-effect-in-two*/}
 
-```js {6,9,13}
-import { useContext, useEffect } from 'react';
-import { createConnection } from './api.js';
 
-function ChatRoom({ roomId, serverUrl }) {
-  const authData = useContext(AuthContext);
-  const authToken = authData.token; // This variable is declared directly inside a component
-  useEffect(() => {
-    const connection = createConnection(serverUrl, roomId, {
-      authToken // It's used inside the Effect...
-    });
-    connection.connect();
-    return () => connection.disconnect();
-  }, [roomId, serverUrl, authToken]); // ...so it's one of the dependencies.
-  // ...
-}
-```
-
-This *also* includes functions, which you'll read about below on this page.
-
-</DeepDive>
-
-## To change the dependencies, change the code {/*to-change-the-dependencies-change-the-code*/}
-
-TODO
-
-## Separating independent Effects {/*separating-independent-effects*/}
-
-TODO
-
-## Removing unnecessary dependencies {/*removing-unnecessary-dependencies*/}
-
-TODO
-
-## Recap {/*recap*/}
-
-TODO
-
-## Challenges {/*challenges*/}
-
-TODO
