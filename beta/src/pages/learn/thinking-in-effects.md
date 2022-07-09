@@ -188,6 +188,71 @@ After you adjust the Effect's dependencies to reflect the code, you should alway
 
 **When this happens, your first instinct might be to omit some dependencies from the list, but that leads to subtle bugs that are very hard to diagnose. Instead, edit the *rest* of the code to *not need* that dependency.** It's not always obvious how to do this, so the rest of this page will introduce you to the most common scenarios.
 
-### Splitting the Effect in two {/*splitting-the-effect-in-two*/}
+### Removing an Effect {/*removing-an-effect*/}
 
+The first thing you should think about is whether this code should be an Effect at all. For example, suppose you have a form thats submits a POST request and shows a notification [toast](https://uxdesign.cc/toasts-or-snack-bars-design-organic-system-notifications-1236f2883023). You trigger the Effect by setting state:
+
+```js {4-9}
+function Form() {
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (submitted) {
+      post('/api/register');
+      showToast('Successfully registered!');
+    }
+  }, [submitted]);
+
+  function handleSubmit() {
+    setSubmitted(true);
+  }  
+
+  // ...
+}
+```
+
+Later, you want to style the notification toast according to the current theme, so you read the current theme. Since `theme` is declared in the component body, it is a reactive value, and you must declare it as a depedency:
+
+```js {3,8,10}
+function Form() {
+  const [submitted, setSubmitted] = useState(false);
+  const theme = useContext(ThemeContext);
+
+  useEffect(() => {
+    if (submitted) {
+      post('/api/register');
+      showToast('Successfully registered!', { theme });
+    }
+  }, [submitted, theme]); // ✅ All dependencies declared
+
+  function handleSubmit() {
+    setSubmitted(true);
+  }  
+
+  // ...
+}
+```
+
+But by doing this, you've introduced a bug. Imagine you submit the form first and then switch between Dark and Light themes. The `theme` will change, the Effect will re-run, and so it will display the same notification again!
+
+**The problem here is that this shouldn't be an Effect in the first place.** You want to send this POST request and show the notification in response to *submitting the form,* which is a particular interaction. When you want to run some code in response to particular interaction, put that logic directly into the corresponding event handler:
+
+```js {5-6}
+function Form() {
+  const theme = useContext(ThemeContext);
+
+  function handleSubmit() {
+    post('/api/register');
+    showToast('Successfully registered!', { theme });
+  }  
+
+  // ...
+}
+```
+
+Now the code is inside the event handler, it's not reactive--so it will only run when the user submits the form.
+
+Don't try to remove all Effects. It makes sense to write an Effect when you want to run some logic *because the component is displayed* rather than in response to a particular interaction. Read [Synchronizing with Effects](/learn/synchronizing-with-effects) to learn when to use Effects. Then, check out [You Might Not Need an Effect](/learn/you-might-not-need-an-effect) to learn when and how to avoid them.
+
+### Splitting an Effect in two {/*splitting-an-effect-in-two*/}
 
