@@ -448,7 +448,7 @@ function useFetchedList(fetchList, parentId, shouldFetch = true) {
         ignore = true;
       };
     }
-  }, [fetchList, parentId]); // ✅ All dependencies declared
+  }, [fetchList, parentId, shouldFetch]); // ✅ All dependencies declared
   return options;
 }
 ```
