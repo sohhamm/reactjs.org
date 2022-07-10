@@ -280,9 +280,9 @@ function ShippingForm({ country }) {
 
 This is a good example of [fetching data in an Effect.](/learn/you-might-not-need-an-effect#fetching-data) You are synchronizing the `cities` state with the network according to the `country` prop. You can't do this in an event handler because you need to fetch as soon as `ShippingForm` is displayed and whenever the `country` changes (no matter which interaction causes it).
 
-Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You could try adding a `fetchAreas(city)` call to the same Effect when there's a selected `city`:
+Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You could try adding a `fetchAreas(city)` call to the same Effect when some `city` is selected:
 
-```js {15-21}
+```js {6,14-20}
 function ShippingForm({ country }) {
   const [cities, setCities] = useState([]);
   const [city, setCity] = useState('');
@@ -320,10 +320,9 @@ However, since the Effect now uses the `city` state variable, you've had to add 
 
 Split the logic into two Effects, each of which reacts to the prop that it needs to synchronize with:
 
-```js {4-14,17-30}
+```js {3-13,17-30}
 function ShippingForm({ country }) {
   const [cities, setCities] = useState([]);
-  const [city, setCity] = useState('');
   useEffect(() => {
     let ignore = false;
     fetchCities(country).then(json => {
@@ -336,6 +335,7 @@ function ShippingForm({ country }) {
     };
   }, [country]); // ✅ All dependencies declared
 
+  const [city, setCity] = useState('');
   const [areas, setAreas] = useState([]);
   useEffect(() => {
     if (city === '') {
