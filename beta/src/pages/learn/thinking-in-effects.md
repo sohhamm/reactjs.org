@@ -435,13 +435,13 @@ function ShippingForm({ country }) {
 }
 
 function useFetchedList(fetchList, parentId, shouldFetch = true) {
-  const [options, setOptions] = useState([]);
+  const [list, setList] = useState([]);
   useEffect(() => {
     if (shouldFetch) {
       let ignore = false;
       fetchList(parentId).then(json => {
         if (!ignore) {
-          setOptions(json);
+          setList(json);
         }
       });
       return () => {
@@ -449,7 +449,7 @@ function useFetchedList(fetchList, parentId, shouldFetch = true) {
       };
     }
   }, [fetchList, parentId, shouldFetch]); // ✅ All dependencies declared
-  return options;
+  return list;
 }
 ```
 
