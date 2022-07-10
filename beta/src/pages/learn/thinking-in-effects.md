@@ -180,9 +180,9 @@ Now, your Effect will re-run more often. It will re-run not only when the user s
 
 When your Effect uses a reactive value, you must include it in the dependencies. This may cause problems:
 
-* Sometimes, you want to only read *the latest value* of some dependency instead of "reacting" to its changes.
 * Sometimes, you want to re-execute *different parts* of your Effect under different conditions.
 * Sometimes, a dependency may change too often *unintentionally* because it's an object or a function.
+* Sometimes, you want to only read *the latest value* of some dependency instead of "reacting" to its changes.
 
 After you adjust the Effect's dependencies to reflect the code, you should always look at the dependency list. Does it make sense for the Effect to re-run when these dependencies change? Sometimes, the answer is "no."
 
