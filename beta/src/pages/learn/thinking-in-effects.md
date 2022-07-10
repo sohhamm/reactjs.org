@@ -443,6 +443,14 @@ TODO
 
 TODO
 
+### Updating state based on previous state from Effects {/*updating-state-based-on-previous-state-from-effects*/}
+
+TODO
+
+### Updating state based on other state from Effects {/*updating-state-based-on-other-state-from-effects*/}
+
+TODO
+
 ### Calling event handlers from Effects {/*calling-event-handlers-from-effects*/}
 
 TODO
