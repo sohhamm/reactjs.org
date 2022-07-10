@@ -261,7 +261,7 @@ Imagine you're creating a shipping form where the user needs to choose their cit
 ```js
 function ShippingForm({ country }) {
   const [cities, setCities] = useState([]);
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -285,7 +285,7 @@ Now let's say you're adding a second select box for city areas, which should fet
 ```js {6,14-20}
 function ShippingForm({ country }) {
   const [cities, setCities] = useState([]);
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState(null);
   const [areas, setAreas] = useState([]);
 
   // 🔴 Avoid: A single Effect synchronizes two independent processes
@@ -296,7 +296,7 @@ function ShippingForm({ country }) {
         setCities(json);
       }
     });
-    if (city !== '') {
+    if (city !== null) {
       fetchAreas(city).then(json => {
         if (!ignore) {
           setAreas(json);
@@ -335,10 +335,10 @@ function ShippingForm({ country }) {
     };
   }, [country]); // ✅ All dependencies declared
 
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState(null);
   const [areas, setAreas] = useState([]);
   useEffect(() => {
-    if (city === '') {
+    if (city === null) {
       return;
     }
     let ignore = false;
@@ -369,14 +369,14 @@ import { fetchCities, fetchAreas } from './api.js';
 function ShippingForm({ country }) {
   const cities = useFetchedList(fetchCities, country);
   const [city, setCity] = useState('');
-  const areas = useFetchedList(fetchAreas, city);
+  const areas = useFetchedList(fetchAreas, city, city !== null);
   // ...
 }
 
-function useFetchedList(fetchList, parentId) {
+function useFetchedList(fetchList, parentId, shouldFetch = true) {
   const [options, setOptions] = useState([]);
   useEffect(() => {
-    if (parentId !== '') {
+    if (shouldFetch) {
       let ignore = false;
       fetchList(parentId).then(json => {
         if (!ignore) {
