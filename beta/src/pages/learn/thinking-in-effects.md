@@ -214,6 +214,8 @@ function Chat() {
 
 They're not valid dependencies because they don't participate in the React rendering flow. Changing a mutable value doesn't trigger a re-render, so React wouldn't know to re-run the Effect. However, if there is a way to subscribe to the changes of the mutable value you're interested in, you can [synchronize it with the React state](/learn/you-might-not-need-an-effect#subscribing-to-an-external-store), and then use that React state variable as a dependency of your Effect.
 
+Values that are guaranteed to be the same on every render can be omitted. For example, the `ref` wrapper object returned from [`useRef`](/apis/useref) and the `set` function returned by [`useState`](/apis/usestate) are *stable,* i.e. guaranteed to never change between re-renders by React. You can omit them from the list. However, the dependency linter may ask you to include them if it can't verify that they're directly coming from React (for example, if you pass them from a parent component). In that case you should specify them.
+
 Objects and functions can be dependencies, but you need to be careful:
 
 ```js
