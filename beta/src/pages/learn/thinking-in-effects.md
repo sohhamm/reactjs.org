@@ -218,20 +218,18 @@ Objects and functions can be dependencies, but you need to be careful:
 
 ```js
 function Page() {
-  const obj = {};
-  function fn() {
+  const obj = {}; // 🔴 Inline object will be different on every render
+  function fn() { // 🔴 Inline function will be different on every render
     // ...
   }
   useEffect(() => {
-    fn(arg);
-  }, [
-    obj, // 🔴 Inline object will be different on every render
-    fn   // 🔴 Inline function will be different on every render
-  ]);
+    fn(obj);
+  }, [obj, fn]);
+  // ...
 }
 ```
 
-Inline objects and functions are always "new": `{} !== {}` and `function() {} !== function() {}`. This means that the dependency array does not serve any purpose since the dependencies are different after *every* render. If this doesn't break Effect's logic, remove the dependency array (**not** leave it empty).
+Inline objects and functions are always "new": [`{} !== {}`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality#comparing_objects) and `function() {} !== function() {}`. This means that the dependency array does not serve any purpose since the dependencies are different after *every* render. If this doesn't break Effect's logic, remove the dependency array (**not** leave it empty).
 
 You can usually replace object and function dependencies with simpler primitive dependencies, or remove the need for them altogether. You'll learn common ways to do this [later on this page.](#how-to-fix-an-effect-that-re-runs-too-often)
 
