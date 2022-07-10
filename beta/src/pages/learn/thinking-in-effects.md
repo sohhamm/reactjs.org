@@ -80,7 +80,7 @@ function ChatRoom() {
     return () => {
       connection.disconnect();
     };
-  }, []);
+  }, []); // ✅ All dependencies declared
   // ...
 }
 ```
@@ -201,7 +201,7 @@ function Form() {
       post('/api/register');
       showToast('Successfully registered!');
     }
-  }, [submitted]);
+  }, [submitted]); // ✅ All dependencies declared
 
   function handleSubmit() {
     setSubmitted(true);
@@ -256,3 +256,205 @@ Don't try to remove all Effects. It makes sense to write an Effect when you want
 
 ### Splitting an Effect in two {/*splitting-an-effect-in-two*/}
 
+Imagine you're creating a shipping form where the user needs to choose their city and area. You fetch the list of `cities` from the server according to the selected `country` so that you can show them as dropdown options:
+
+```js
+function ShippingForm({ country }) {
+  const [cities, setCities] = useState([]);
+  const [city, setCity] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+    fetchCities(country).then(json => {
+      if (!ignore) {
+        setCities(json);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [country]); // ✅ All dependencies declared
+
+  // ...
+```
+
+This is a good example of [fetching data in an Effect.](/learn/you-might-not-need-an-effect#fetching-data) You are synchronizing the `cities` state with the network according to the `country` state. You can't do this in an event handler because you need to fetch as soon as `ShippingForm` is displayed and whenever the `country` changes (no matter which interaction causes it).
+
+Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You could try adding a `fetchAreas(city)` call to the same Effect when there's a selected `city`:
+
+```js {15-21}
+function ShippingForm({ country }) {
+  const [cities, setCities] = useState([]);
+  const [city, setCity] = useState('');
+  const [areas, setAreas] = useState([]);
+
+  // 🔴 Avoid: A single Effect synchronizes two independent processes
+  useEffect(() => {
+    let ignore = false;
+    fetchCities(country).then(json => {
+      if (!ignore) {
+        setCities(json);
+      }
+    });
+    if (city !== '') {
+      fetchAreas(city).then(json => {
+        if (!ignore) {
+          setAreas(json);
+        }
+      });
+    }
+    return () => {
+      ignore = true;
+    };
+  }, [country, city]); // ✅ All dependencies declared
+
+  // ...
+```
+
+However, since the Effect now uses the `city` state variable, you've had to add `city` to the list of dependencies. That, in turn, has introduced a problem. Now, whenever the user selects a different city, the Effect will re-run and call `fetchCities(country)`. As a result, you will be unnecessarily refetching the list of cities many times.
+
+**The problem with this code is that you're synchronizing two different unrelated things:**
+
+1. You want to synchronize the `cities` state to the network based on the `country` prop.
+1. You want to synchronize the `areas` state to the network based on the `city` state.
+
+Split the logic into two Effects, each of which reacts to the prop that it needs to synchronize with:
+
+```js {4-14,17-30}
+function ShippingForm({ country }) {
+  const [cities, setCities] = useState([]);
+  const [city, setCity] = useState('');
+  useEffect(() => {
+    let ignore = false;
+    fetchCities(country).then(json => {
+      if (!ignore) {
+        setCities(json);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [country]); // ✅ All dependencies declared
+
+  const [areas, setAreas] = useState([]);
+  useEffect(() => {
+    if (city === '') {
+      return;
+    }
+    let ignore = false;
+    fetchAreas(city).then(json => {
+      if (!ignore) {
+        setAreas(json);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [city]); // ✅ All dependencies declared
+
+  // ...
+```
+
+After you split the Effects, changing the `city` no longer causes the `countries` to be refetched. Although [writing a chain of Effects that update state is unnecessary in synchronous code,](/learn/you-might-not-need-an-effect#chains-of-computations) it makes sense here. Both Effects talk to the network and are independent from each other. If you delete the first Effect and hardcode `city` to be `"Tokyo"`, the second Effect wouldn't break. Conversely, the first Effect still works if you delete the second one.
+
+In the above example, both of the Effects you've split ended up looking very similar. However, the main reason you split them was because they *synchronize different processes.* A good rule of thumb is to check whether you can split the logic in a way that each Effect still works and makes sense if you delete the other one. If they work independently from each other or synchronize with different systems, splitting them apart usually makes sense.
+
+<DeepDive title="Extracting independent Effects into custom Hooks">
+
+When your component contains multiple Effects that are independent from each other, it's often a good idea to wrap those Effects into custom Hooks with a higher-level name and purpose. For example, you can move the logic to fetch the list of options for the dropdown to a custom `useFetchedList` Hook:
+
+```js {4,6,10}
+import { fetchCities, fetchAreas } from './api.js';
+
+function ShippingForm({ country }) {
+  const cities = useFetchedList(fetchCities, country);
+  const [city, setCity] = useState('');
+  const areas = useFetchedList(fetchAreas, city);
+  // ...
+}
+
+function useFetchedList(fetchList, parentId) {
+  const [options, setOptions] = useState([]);
+  useEffect(() => {
+    if (parentId !== '') {
+      let ignore = false;
+      fetchList(parentId).then(json => {
+        if (!ignore) {
+          setOptions(json);
+        }
+      });
+      return () => {
+        ignore = true;
+      };
+    }
+  }, [fetchList, parentId]); // ✅ All dependencies declared
+  return options;
+}
+```
+
+This code is equivalent to the earlier example, but the person working on the `ShippingForm` component no longer needs to think about how these Effects work, and can focus on the purpose (fetch a list).
+
+Note how `fetchList` must be a dependency now. Previously, this wasn't necessary because both your Effects directly used the `fetchCities` and `fetchAreas` imports from the top-level scope. Values from the top-level scope don't participate in the React rendering data flow, so you didn't need to include them as dependencies. However, now that you may pass an arbitrary function to `useFetchedList` as the `fetchList` argument, the linter makes sure that your Effect handles `fetchList` changing over time.
+
+There is a concrete reason why this matters. Imagine someone extends your code a hundred years later:
+
+```js {5,6}
+import { fetchEarthCountries, fetchMoonCountries } from './api.js';
+
+function ShippingForm() {
+  const [isMoon, setIsMoon] = useState(false);
+  const fetchCountries = isMoon ? fetchMoonCountries : fetchEarthCountries;
+  const countries = useFetchedList(fetchCountries);
+  // ...
+}
+
+```
+
+If the user toggles the checkbox and calls `setIsMoon(true)`, the `useFetchedList` Hook will receive the `fetchMoonCountries` function rather than the `fetchEarthCountries` function as the `fetchList` argument. If you didn't include `fetchList` in the dependencies (which the linter makes you do), then this component would get "stuck" showing the Earth countries even after you've selected the Moon.
+
+However, there is a pitfall. If you pass an *inline function* to `useFetchedList`, it will enter an infinite loop:
+
+```js
+function ShippingForm() {
+  const cities = useFetchedList((c) => fetchCities(c), country);
+```
+
+Unlike previously, where the `fetchList` function was always an import (which doesn't change over time), when you pass an inline function, it will be a different function on every render. As a result, each time the `ShippingForm` component re-renders, the `fetchList` dependency will re-trigger the Effect. This will keep repeating because the Effect will set the state, leading to another re-render, and so on.
+
+There are different ways you can solve this, depending on the API you prefer:
+
+* You could make `useFetchedList` take a URL like `'/api/cities'` instead of an async function.
+* You could warn in development if `useFetchedList` receives different functions over time.
+* You could wrap the `useFetchedList` definition into a function called `createFetchableList` that takes the `fetchList` function and returns a `useFetchedList` Hook *for that specific kind of list.* Then you would write code like `const useFetchCountries = createFetchableList(fetchCountries)` at the top level outside of your component. This would ensure that the fetching function never changes.
+
+You will learn more about how to safely call functions from Effects later on this page.
+
+</DeepDive>
+
+### Replacing objects and functions with primitives {/*replacing-objects-and-functions-with-primitives*/}
+
+TODO
+
+### Moving objects and functions outside the component {/*moving-objects-and-functions-outside-the-component*/}
+
+TODO
+
+### Moving objects and functions inside the Effect {/*moving-objects-and-functions-inside-the-effect*/}
+
+TODO
+
+### Calling event handlers from Effects {/*calling-event-handlers-from-effects*/}
+
+TODO
+
+### Reading the latest props and state {/*reading-the-latest-props-and-state*/}
+
+TODO
+
+## Recap {/*recap*/}
+
+TODO
+
+## Challenges {/*challenges*/}
+
+TODO
