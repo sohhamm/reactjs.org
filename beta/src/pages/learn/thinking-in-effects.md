@@ -176,6 +176,67 @@ function ChatRoom({ roomId, selectedServerUrl }) {
 
 Now, your Effect will re-run more often. It will re-run not only when the user selects a different room, but also when they select a different server. And this is correct! This is what makes Effects reactive--**when you edit an Effect's code, you also change how often it runs.** This is how it stays synchronized to the latest props and state.
 
+<DeepDive title="What kind of values can be dependencies?">
+
+Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as props props, state, and any other variable that's directly inside the component and is used by the Effect:
+
+```js
+// 🔴 Variables outside the component can't be dependencies
+const notADependency1 = // ...
+
+function YourComponent({ dependency1 }) { // ✅ Props can be dependencies
+  // ✅ Variables directly inside the component can be dependencies:
+  const dependency2 = // ...
+  const [dependency3, dependency4] = useSomething();
+
+  useEffect(() => {
+    // 🔴 Variables inside the Effect can't be dependencies.
+    const notADependency2 = // ...
+    // ...
+  }, [dependency1, dependency2, dependency3, dependency4]);
+  // ...
+}
+```
+
+Global or mutable values can't be dependencies:
+
+```js
+function Chat() {
+  const ref = useRef(null);
+  useEffect(() => {
+    // ...
+  }, [
+    window.location.query, // 🔴 Can't be a dependency: mutable and global
+    ref.current.offsetTop  // 🔴 Can't be a dependency: mutable
+  ]);
+}
+```
+
+They're not valid dependencies because they don't participate in the React rendering flow. Changing a mutable value doesn't trigger a re-render, so React wouldn't know to re-run the Effect. However, if there is a way to subscribe to the changes of the mutable value you're interested in, you can [synchronize it with the React state](/learn/you-might-not-need-an-effect#subscribing-to-an-external-store), and then use that React state variable as a dependency of your Effect.
+
+Objects and functions can be dependencies, but you need to be careful:
+
+```js
+function Page() {
+  const obj = {};
+  function fn() {
+    // ...
+  }
+  useEffect(() => {
+    fn(arg);
+  }, [
+    obj, // 🔴 Inline object will be different on every render
+    fn   // 🔴 Inline function will be different on every render
+  ]);
+}
+```
+
+Inline objects and functions are always "new": `{} !== {}` and `function() {} !== function() {}`. This means that the dependency array does not serve any purpose since the dependencies are different after *every* render. If this doesn't break Effect's logic, remove the dependency array (**not** leave it empty).
+
+You can usually replace object and function dependencies with simpler primitive dependencies, or remove the need for them altogether. You'll learn common ways to do this [later on this page.](#how-to-fix-an-effect-that-re-runs-too-often)
+
+</DeepDive>
+
 ## How to fix an Effect that re-runs too often? {/*how-to-fix-an-effect-that-re-runs-too-often*/}
 
 When your Effect uses a reactive value, you must include it in the dependencies. This may cause problems:
