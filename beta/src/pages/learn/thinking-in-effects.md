@@ -431,7 +431,7 @@ You will learn more about how to safely call functions from Effects later on thi
 
 </DeepDive>
 
-### Replacing objects and functions with primitives {/*replacing-objects-and-functions-with-primitives*/}
+### Replacing objects and function dependencies with primitives {/*replacing-objects-and-function-dependencies-with-primitives*/}
 
 TODO
 
@@ -443,11 +443,7 @@ TODO
 
 TODO
 
-### Updating state based on previous state from Effects {/*updating-state-based-on-previous-state-from-effects*/}
-
-TODO
-
-### Updating state based on other state from Effects {/*updating-state-based-on-other-state-from-effects*/}
+### Updating state from Effects {/*updating-state-based-on-previous-state-from-effects*/}
 
 TODO
 
@@ -455,7 +451,7 @@ TODO
 
 TODO
 
-### Reading the latest props and state {/*reading-the-latest-props-and-state*/}
+### Reading the latest props and state from Effects {/*reading-the-latest-props-and-state-from-effects*/}
 
 TODO
 
