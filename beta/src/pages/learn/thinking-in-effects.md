@@ -221,7 +221,7 @@ function Form() {
   useEffect(() => {
     if (submitted) {
       post('/api/register');
-      showToast('Successfully registered!', { theme });
+      showToast('Successfully registered!', theme);
     }
   }, [submitted, theme]); // ✅ All dependencies declared
 
@@ -243,7 +243,7 @@ function Form() {
 
   function handleSubmit() {
     post('/api/register');
-    showToast('Successfully registered!', { theme });
+    showToast('Successfully registered!', theme);
   }  
 
   // ...
