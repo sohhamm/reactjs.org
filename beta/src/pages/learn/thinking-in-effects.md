@@ -343,7 +343,7 @@ This is a good example of [fetching data in an Effect.](/learn/you-might-not-nee
 
 Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You could try adding a `fetchAreas(city)` call to the same Effect when some `city` is selected:
 
-```js {6,14-20}
+```js {6,14-20,24}
 function ShippingForm({ country }) {
   const [cities, setCities] = useState([]);
   const [city, setCity] = useState(null);
