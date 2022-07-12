@@ -424,7 +424,7 @@ function ShippingForm({ country }) {
 
 Now the first Effect only re-runs if the `country` changes, while the second Effect re-runs when the `city` changes. You've separated them by purpose: two separate Effects synchronize two different things.
 
-Notice how the final code is longer than the original code. This is fine. **Each Effect should represent an independent synchronization process.** If there is one thing being synchronized, there should be one Effect. If there are two different things being synchronized independently from each other, then there should be two Effects. You should split Effects according to their purpose, not whether the code is shorter or "feels cleaner."
+The final code is longer than the original, but splitting these Effects is still correct. **Each Effect should represent an independent synchronization process.** If there is one thing being synchronized, there should be one Effect. If there are two different things being synchronized independently from each other, then there should be two Effects. You should split Effects according to their purpose, not whether the code is shorter or "feels cleaner."
 
 In the above example, deleting one Effect wouldn't break the other Effect's logic. This is a good indication that they synchronize different things, and so it made sense to split them up. On the other hand, if you split up a cohesive piece of logic into separate Effects, the code may look "cleaner" but will be [more difficult to maintain.](/learn/you-might-not-need-an-effect#chains-of-computations)
 
