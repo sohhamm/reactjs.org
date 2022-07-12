@@ -494,28 +494,27 @@ When you synchronize with an external system, your custom Hook name may be more 
 * ✅ `useIntersectionObserver(ref, options)`
 * ✅ `useBackboneModel(model)`
 
-However, you should avoid creating and using low-level Effect-like abstractions:
+Try to avoid creating and using custom "lifecycle" Hooks:
 
 * 🔴 `useMount(fn)`
 * 🔴 `useUnmount(fn)`
 * 🔴 `useEffectOnce(fn)`
 * 🔴 `useUpdateEffect(fn)`
-* 🔴 `useIsomorphicLayoutEffect(fn)`
 
 Consider this example `useMount` Hook that tries to ensure some code only runs "on mount":
 
 ```js {2-3,11-12}
-function ChatRoom() {
-  // 🔴 Avoid: using low-level Effect-like abstractions
+function ChatRoom({ roomId }) {
+  // 🔴 Avoid: using custom "lifecycle" Hooks
   useMount(() => {
-    post('/analytics/event', { eventName: 'visit_chat' });
-    const connection = createConnection();
+    post('/analytics/event', { eventName: 'visit_chat', roomId });
+    const connection = createConnection(roomId);
     connection.connect();
   });
   // ...
 }
 
-// 🔴 Avoid: creating low-level Effect-like abstractions
+// 🔴 Avoid: creating custom "lifecycle" Hooks
 function useMount(fn) {
   useEffect(() => {
     fn();
@@ -527,7 +526,7 @@ Abstractions like `useMount` above make your code fragile and don't fit well wit
 
 Similarly, if you alias the `useEffect(fn, [])` pattern with a "nicer" name like `useEffectOnce`, React's [remounting components in development](/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development) would make its name misleading. In general, if you find yourself trying to "work around" React's behavior in a custom Hook, it's time to pause and rethink the approach.
 
-If you're writing an Effect, start by using the idiomatic React API directly:
+If you're writing an Effect, start by using the React API directly:
 
 ```js
 // ✅ Good: raw Effects separated by purpose
@@ -557,7 +556,7 @@ function ChatRoom({ roomId }) {
 }
 ```
 
-But a raw `useEffect` is always better than using a low-level Effect-like custom Hook like `useMount`.
+A good custom Hook API makes the code more declarative by constraining what you can do with it. For example, `useImpressionLog()` takes the event name and the extra data to send. You can't make it do anything else--the only thing it can do is send an impression log to analytics. That's why it's easy to use. If your custom Hook API doesn't constrain the use cases, consider using the raw React APIs directly.
 
 </DeepDive>
 
