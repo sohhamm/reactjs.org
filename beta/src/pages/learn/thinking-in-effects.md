@@ -551,7 +551,7 @@ function ChatRoom({ roomId }) {
 }
 ```
 
-**A good custom Hook keeps the calling code declarative by constraining what it can do.** For example, `useChatConnection(roomId)` can only connect you to the chat room, while `useImpressionLog(eventName, extraData)` can only send an impression log to the analytics. If your custom Hook API doesn't constrain the use cases and is very abstract, in the long run it's likely to introduce more problems than it solves.
+**A good custom Hook makes the calling code more declarative by constraining what it does.** For example, `useChatConnection(roomId)` can only connect to the chat room, while `useImpressionLog(eventName, extraData)` can only send an impression log to the analytics. If your custom Hook API doesn't constrain the use cases and is very abstract, in the long run it's likely to introduce more problems than it solves.
 
 </DeepDive>
 
