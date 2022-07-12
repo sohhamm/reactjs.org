@@ -466,24 +466,23 @@ function ShippingForm({ country }) {
   // ...
 ```
 
-Custom Hooks like `useData` make your components a lot easier to follow:
+Custom Hooks like `useData` make your components easier to read and maintain:
 
-1. **Your component's code is no longer concerned with how the Effect works.** When you write components, you want to express everything as declaratively as possible. You want to specify *what* to synchronize, not *how.*
-2. **A custom Hook let you clearly express the intent.** When you wrote raw Effects in the component body, it was difficult to tell from the code how the data flowed in and out. Now that the logic is in the `useData` Hook, you can "forget" how it works and treat it as a black box: you feed the `url` in, and you get the `data` out.
-3. **You can reuse the same custom Hook in other components.** As you create custom Hooks for your application or import custom Hooks from the community packages, you'll write raw Effects yourself less and less often.
+- **Custom Hooks lets you emphasize the intent.** When your component body contained several raw Effects, it was tricky to tell at a glance how the data flowed in and out. Now that the logic is in the `useData` Hook, you can "forget" how it works and treat it as a black box: you feed the `url` in, and you get the `data` out.
+- **You can reuse custom Hooks between components.** As you create more app-specific custom Hooks or import them from the community packages, you won't need to write Effects in your components as often.
 
-Custom Hooks also make it easier to replace your Effects later. For example, if you decide to switch to a more efficient data fetching solution, it's less work to migrate from a Hook like `useData` than from raw `useEffect` scattered across many different components. [Read more about data fetching with Effects and the alternatives.](/learn/you-might-not-need-an-effect#fetching-data)
+Custom Hooks also make it easier to replace your Effects later. For example, if you decide to switch to a more efficient data fetching solution, it's less work to migrate from a Hook like `useData` than from the raw `useEffect` scattered across many different components. [Read more about data fetching with Effects and the alternatives.](/learn/you-might-not-need-an-effect#fetching-data)
 
-<DeepDive title="When should you extract a custom Hook?">
+<DeepDive title="When is extracting a custom Hook a good idea?">
 
-Before you extract a custom Hook, think about its name.
+Start by choosing your custom Hook's name. If you can't think of a good name, don't extract it.
 
 Ideally, the name should be clear enough that even a person who doesn't write code every day could have a good guess about what your custom Hook is doing, what information it takes, and what it returns:
 
 * ✅ `useData(url)`
 * ✅ `useImpressionLog(eventName, extraData)`
 * ✅ `useChatRoom(roomId)`
-* ✅ `useDropdown(items, selectedItem)`
+* ✅ `useDropdown(items, selectedId)`
 * ✅ `useDarkMode()`
 
 When you synchronize with an external system, your custom Hook name may be more technical and use jargon specific to that system. It's good as long as it would be clear to a person familiar with that system:
@@ -494,22 +493,23 @@ When you synchronize with an external system, your custom Hook name may be more 
 * ✅ `useIntersectionObserver(ref, options)`
 * ✅ `useBackboneModel(model)`
 
-Try to avoid creating and using custom "lifecycle" Hooks:
+**Keep custom Hooks focused on concrete high-level use cases.** Avoid creating and using custom "lifecycle" Hooks that act as alternatives and convenience wrappers for the `useEffect` API itself:
 
 * 🔴 `useMount(fn)`
 * 🔴 `useUnmount(fn)`
 * 🔴 `useEffectOnce(fn)`
 * 🔴 `useUpdateEffect(fn)`
 
-Consider this example `useMount` Hook that tries to ensure some code only runs "on mount":
+For example, this `useMount` Hook tries to ensure some code only runs "on mount":
 
-```js {2-3,11-12}
-function ChatRoom({ roomId }) {
+```js {2-3,12-13}
+function ChatRoom() {
   // 🔴 Avoid: using custom "lifecycle" Hooks
   useMount(() => {
-    post('/analytics/event', { eventName: 'visit_chat', roomId });
-    const connection = createConnection(roomId);
+    const connection = createConnection();
     connection.connect();
+
+    post('/analytics/event', { eventName: 'visit_chat' });
   });
   // ...
 }
@@ -522,7 +522,7 @@ function useMount(fn) {
 }
 ```
 
-Abstractions like `useMount` above make your code fragile and don't fit well with React's paradigm. For example, if you used this `useMount` Hook instead of a raw `useEffect` in the earlier [chat room example](#effects-run-whenever-synchronization-is-needed), the linter wouldn't be to find the mistake in your code when you forgot to "react" to `roomId` changes.
+**Custom "lifecycle" Hooks like `useMount` don't fit well into the React paradigm.** For example, if you used this `useMount` Hook instead of a raw `useEffect` in the earlier [chat room example](#effects-run-whenever-synchronization-is-needed), the linter wouldn't find the mistake in your code when you forgot to "react" to `roomId` changes. (And if you *don't* want some prop or state to cause the Effect to re-run, [there is a different recommended way to do that.](#reading-the-latest-props-and-state-from-effects))
 
 Similarly, if you alias the `useEffect(fn, [])` pattern with a "nicer" name like `useEffectOnce`, React's [remounting components in development](/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development) would make its name misleading. In general, if you find yourself trying to "work around" React's behavior in a custom Hook, it's time to pause and rethink the approach.
 
@@ -532,31 +532,31 @@ If you're writing an Effect, start by using the React API directly:
 // ✅ Good: raw Effects separated by purpose
 function ChatRoom({ roomId }) {
   useEffect(() => {
-    post('/analytics/event', { eventName: 'visit_chat', roomId });
-  }, [roomId]);
-
-  useEffect(() => {
     const connection = createConnection();
     connection.connect();
     return () => connection.disconnect();
   }, [roomId]);
 
+  useEffect(() => {
+    post('/analytics/event', { eventName: 'visit_chat', roomId });
+  }, [roomId]);
+
   // ...
 }
 ```
 
-Later, you can extract custom Hooks for the application-level and domain-specific concepts:
+Then, you can (but don't have to) extract custom Hooks for different high-level use cases:
 
 ```js
-// ✅ Great: raw Effects named after their purpose
+// ✅ Great: custom Hooks named after their purpose
 function ChatRoom({ roomId }) {
-  useImpressionLog('visit_chat', { roomId });
   useChatRoom(roomId);
+  useImpressionLog('visit_chat', { roomId });
   // ...
 }
 ```
 
-A good custom Hook API makes the code more declarative by constraining what you can do with it. For example, `useImpressionLog()` takes the event name and the extra data to send. You can't make it do anything else--the only thing it can do is send an impression log to analytics. That's why it's easy to use. If your custom Hook API doesn't constrain the use cases, consider using the raw React APIs directly.
+**A good custom Hook keeps the calling code declarative by constraining what it can do.** For example, `useChatRoom(roomId)` can only connect you to the chat room, while `useImpressionLog(eventName, extraData)` can only send an impression log to the analytics. If your custom Hook API doesn't constrain the use cases and is very abstract, in the long run it's likely to introduce more problems than it solves.
 
 </DeepDive>
 
