@@ -4,7 +4,7 @@ title: 'Thinking in Effects'
 
 <Intro>
 
-The code inside your Effect will re-run after any change to the values that your Effect depends on. This is why you need to approach writing Effects with a different mindset than writing event handlers. You will always start by writing the code inside your Effect first. Then you'll specify its dependencies according to the code you already wrote. Finally, if some dependency changes too often and causes your Effect to re-run more often than necessary, you'll have to adjust the code so that it *does not need* that dependency, and then follow the same steps again. It's not always obvious how to do this, so this page will help you learn common patterns and idioms.
+An Effect re-runs after any change to the values that it depends on. This is why writing Effects requires a different mindset than writing event handlers. You'll write the code inside your Effect first. Then you'll specify its dependencies according to the code you already wrote. Finally, if a dependency changes too often and causes your Effect to re-run more than needed, you'll have to adjust the code so that it *does not need* that dependency, and follow these steps again. It's not always obvious how to do this, so this page will help you learn common patterns and idioms.
 
 </Intro>
 
@@ -178,7 +178,7 @@ Now, your Effect will re-run more often. It will re-run not only when the user s
 
 <DeepDive title="What kind of values can be dependencies?">
 
-Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as props props, state, and any other variable that's directly inside the component and is used by the Effect:
+Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as props, state, context, and other variables that are directly inside the component and are used by the Effect:
 
 ```js
 // 🔴 Variables outside the component can't be dependencies
@@ -231,9 +231,7 @@ function Page() {
 }
 ```
 
-Inline objects and functions are always "new": [`{} !== {}`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality#comparing_objects) and `function() {} !== function() {}`. This means that the dependency array does not serve any purpose since the dependencies are different after *every* render. If this doesn't break Effect's logic, remove the dependency array (**not** leave it empty).
-
-You can usually replace object and function dependencies with simpler primitive dependencies, or remove the need for them altogether. You'll learn common ways to do this [later on this page.](#how-to-fix-an-effect-that-re-runs-too-often)
+Inline objects and functions are always "new": [`{} !== {}`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality#comparing_objects) and `function(){} !== function(){}`. This makes the `fn` and `obj` dependencies above "always different," so the Effect will re-run after every render. To fix this, you can usually replace object and function dependencies with simpler primitive dependencies, or remove the need for them altogether. You'll learn how to do this [later on this page.](#how-to-fix-an-effect-that-re-runs-too-often)
 
 </DeepDive>
 
@@ -321,16 +319,18 @@ Imagine you're creating a shipping form where the user needs to choose their cit
 
 ```js
 function ShippingForm({ country }) {
-  const [cities, setCities] = useState([]);
+  const [cities, setCities] = useState(null);
   const [city, setCity] = useState(null);
 
   useEffect(() => {
     let ignore = false;
-    fetchCities(country).then(json => {
-      if (!ignore) {
-        setCities(json);
-      }
-    });
+    fetch(`/api/cities?country=${country}`)
+      .then(response => response.json())
+      .then(json => {
+        if (!ignore) {
+          setCities(json);
+        }
+      });
     return () => {
       ignore = true;
     };
@@ -341,28 +341,32 @@ function ShippingForm({ country }) {
 
 This is a good example of [fetching data in an Effect.](/learn/you-might-not-need-an-effect#fetching-data) You are synchronizing the `cities` state with the network according to the `country` prop. You can't do this in an event handler because you need to fetch as soon as `ShippingForm` is displayed and whenever the `country` changes (no matter which interaction causes it).
 
-Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You could try adding a `fetchAreas(city)` call to the same Effect when some `city` is selected:
+Now let's say you're adding a second select box for city areas, which should fetch the `areas` for the currently selected `city`. You might start by adding a second `fetch` call for the list of areas inside the same Effect:
 
-```js {6,14-20,24}
+```js {15-24,28}
 function ShippingForm({ country }) {
-  const [cities, setCities] = useState([]);
+  const [cities, setCities] = useState(null);
   const [city, setCity] = useState(null);
-  const [areas, setAreas] = useState([]);
+  const [areas, setAreas] = useState(null);
 
-  // 🔴 Avoid: A single Effect synchronizes two independent processes
   useEffect(() => {
     let ignore = false;
-    fetchCities(country).then(json => {
-      if (!ignore) {
-        setCities(json);
-      }
-    });
-    if (city !== null) {
-      fetchAreas(city).then(json => {
+    fetch(`/api/cities?country=${country}`)
+      .then(response => response.json())
+      .then(json => {
         if (!ignore) {
-          setAreas(json);
+          setCities(json);
         }
       });
+    // 🔴 Avoid: A single Effect synchronizes two independent processes
+    if (city) {
+      fetch(`/api/areas?city=${city}`)
+        .then(response => response.json())
+        .then(json => {
+          if (!ignore) {
+            setAreas(json);
+          }
+        });
     }
     return () => {
       ignore = true;
@@ -381,33 +385,35 @@ However, since the Effect now uses the `city` state variable, you've had to add 
 
 Split the logic into two Effects, each of which reacts to the prop that it needs to synchronize with:
 
-```js {3-13,17-30}
+```js {19-32}
 function ShippingForm({ country }) {
-  const [cities, setCities] = useState([]);
+  const [cities, setCities] = useState(null);
   useEffect(() => {
     let ignore = false;
-    fetchCities(country).then(json => {
-      if (!ignore) {
-        setCities(json);
-      }
-    });
+    fetch(`/api/cities?country=${country}`)
+      .then(response => response.json())
+      .then(json => {
+        if (!ignore) {
+          setCities(json);
+        }
+      });
     return () => {
       ignore = true;
     };
   }, [country]); // ✅ All dependencies declared
 
   const [city, setCity] = useState(null);
-  const [areas, setAreas] = useState([]);
+  const [areas, setAreas] = useState(null);
   useEffect(() => {
-    if (city === null) {
-      return;
+    if (city) {
+      fetch(`/api/areas?city=${city}`)
+        .then(response => response.json())
+        .then(json => {
+          if (!ignore) {
+            setAreas(json);
+          }
+        });
     }
-    let ignore = false;
-    fetchAreas(city).then(json => {
-      if (!ignore) {
-        setAreas(json);
-      }
-    });
     return () => {
       ignore = true;
     };
@@ -416,79 +422,142 @@ function ShippingForm({ country }) {
   // ...
 ```
 
-After you split the Effects, changing the `city` no longer causes the `countries` to be refetched. Although [writing a chain of Effects that update state is unnecessary in synchronous code,](/learn/you-might-not-need-an-effect#chains-of-computations) it makes sense here. Both Effects talk to the network and are independent from each other. If you delete the first Effect and hardcode `city` to be `"Tokyo"`, the second Effect wouldn't break. Conversely, the first Effect still works if you delete the second one.
+Now the first Effect only re-runs if the `country` changes, while the second Effect re-runs when the `city` changes. You've separated them by purpose: two separate Effects synchronize two different things.
 
-In the above example, both of the Effects you've split ended up looking very similar. However, the main reason you split them was because they *synchronize different processes.* A good rule of thumb is to check whether you can split the logic in a way that each Effect still works and makes sense if you delete the other one. If they work independently from each other or synchronize with different systems, splitting them apart usually makes sense.
+Notice how the final code is longer than the original code. This is fine. **Each Effect should represent an independent synchronization process.** If there is one thing being synchronized, there should be one Effect. If there are two different things being synchronized independently from each other, then there should be two Effects. You should split Effects according to their purpose, not whether the code is shorter or "feels cleaner."
 
-<DeepDive title="Extracting independent Effects into custom Hooks">
+In the above example, deleting one Effect wouldn't break the other Effect's logic. This is a good indication that they synchronize different things, and so it made sense to split them up. On the other hand, if you split up a cohesive piece of logic into separate Effects, the code may look "cleaner" but will be [more difficult to maintain.](/learn/you-might-not-need-an-effect#chains-of-computations)
 
-When your component contains multiple Effects that are independent from each other, it's often a good idea to wrap those Effects into custom Hooks with a higher-level name and purpose. For example, you can move the logic to fetch the list of options for the dropdown to a custom `useFetchedList` Hook:
+### Wrapping an Effect into a custom Hook {/*wrapping-an-effect-into-a-custom-hook*/}
 
-```js {4,6,10}
-import { fetchCities, fetchAreas } from './api.js';
+In the above example, the two Effects are independent from each other but share a lot of repetitive code. This makes the component itself difficult to read. You have to pause to figure out what exactly each Effect does, and how the data flows into and out of each Effect. This is especially difficult when asynchronous logic is involved.
 
-function ShippingForm({ country }) {
-  const cities = useFetchedList(fetchCities, country);
-  const [city, setCity] = useState('');
-  const areas = useFetchedList(fetchAreas, city, city !== null);
-  // ...
-}
+You can simplify the `ShippingForm` component above by extracting the Effect into your own `useData` Hook:
 
-function useFetchedList(fetchList, parentId, shouldFetch = true) {
-  const [list, setList] = useState([]);
+```js {1}
+function useData(url) {
+  const [data, setData] = useState(null);
   useEffect(() => {
-    if (shouldFetch) {
+    if (url) {
       let ignore = false;
-      fetchList(parentId).then(json => {
-        if (!ignore) {
-          setList(json);
-        }
-      });
+      fetch(url)
+        .then(response => response.json())
+        .then(json => {
+          if (!ignore) {
+            setData(json);
+          }
+        });
       return () => {
         ignore = true;
       };
     }
-  }, [fetchList, parentId, shouldFetch]); // ✅ All dependencies declared
-  return list;
+  }, [url]); // ✅ All dependencies declared
+  return data;
 }
 ```
 
-This code is equivalent to the earlier example, but the person working on the `ShippingForm` component no longer needs to think about how these Effects work, and can focus on the purpose (fetch a list).
+Now you can replace both Effects in the `ShippingForm` components with calls to your custom `useData` Hook:
 
-Note how `fetchList` must be a dependency now. Previously, this wasn't necessary because both your Effects directly used the `fetchCities` and `fetchAreas` imports from the top-level scope. Values from the top-level scope don't participate in the React rendering data flow, so you didn't need to include them as dependencies. However, now that you may pass an arbitrary function to `useFetchedList` as the `fetchList` argument, the linter makes sure that your Effect handles `fetchList` changing over time.
+```js {2,4}
+function ShippingForm({ country }) {
+  const cities = useData(`/api/cities?country=${country}`);
+  const [city, setCity] = useState(null);
+  const areas = useData(city ? `/api/areas?city=${city}` : null);
+  // ...
+```
 
-There is a concrete reason why this matters. Imagine someone extends your code a hundred years later:
+Custom Hooks like `useData` make your components a lot easier to follow:
 
-```js {5,6}
-import { fetchEarthCountries, fetchMoonCountries } from './api.js';
+1. **Your component's code is no longer concerned with how the Effect works.** When you write components, you want to express everything as declaratively as possible. You want to specify *what* to synchronize, not *how.*
+2. **A custom Hook let you clearly express the intent.** When you wrote raw Effects in the component body, it was difficult to tell from the code how the data flowed in and out. Now that the logic is in the `useData` Hook, you can "forget" how it works and treat it as a black box: you feed the `url` in, and you get the `data` out.
+3. **You can reuse the same custom Hook in other components.** As you create custom Hooks for your application or import custom Hooks from the community packages, you'll write raw Effects yourself less and less often.
 
-function ShippingForm() {
-  const [isMoon, setIsMoon] = useState(false);
-  const fetchCountries = isMoon ? fetchMoonCountries : fetchEarthCountries;
-  const countries = useFetchedList(fetchCountries);
+Custom Hooks also make it easier to replace your Effects later. For example, if you decide to switch to a more efficient data fetching solution, it's less work to migrate from a Hook like `useData` than from raw `useEffect` scattered across many different components. [Read more about data fetching with Effects and the alternatives.](/learn/you-might-not-need-an-effect#fetching-data)
+
+<DeepDive title="When should you extract a custom Hook?">
+
+Before you extract a custom Hook, think about its name.
+
+Ideally, the name should be clear enough that even a person who doesn't write code every day could have a good guess about what your custom Hook is doing, what information it takes, and what it returns:
+
+* ✅ `useData(url)`
+* ✅ `useImpressionLog(eventName, extraData)`
+* ✅ `useChatRoom(roomId)`
+* ✅ `useDropdown(items, selectedItem)`
+* ✅ `useDarkMode()`
+
+When you synchronize with an external system, your custom Hook name may be more technical and use jargon specific to that system. It's good as long as it would be clear to a person familiar with that system:
+
+* ✅ `useSelector(selector)`
+* ✅ `useMediaQuery(query)`
+* ✅ `useSocket(url)`
+* ✅ `useIntersectionObserver(ref, options)`
+* ✅ `useBackboneModel(model)`
+
+However, you should avoid creating and using low-level Effect-like abstractions:
+
+* 🔴 `useMount(fn)`
+* 🔴 `useUnmount(fn)`
+* 🔴 `useEffectOnce(fn)`
+* 🔴 `useUpdateEffect(fn)`
+* 🔴 `useIsomorphicLayoutEffect(fn)`
+
+Consider this example `useMount` Hook that tries to ensure some code only runs "on mount":
+
+```js {2-3,11-12}
+function ChatRoom() {
+  // 🔴 Avoid: using low-level Effect-like abstractions
+  useMount(() => {
+    post('/analytics/event', { eventName: 'visit_chat' });
+    const connection = createConnection();
+    connection.connect();
+  });
   // ...
 }
 
+// 🔴 Avoid: creating low-level Effect-like abstractions
+function useMount(fn) {
+  useEffect(() => {
+    fn();
+  }, []); // 🔴 React Hook useEffect has a missing dependency: 'fn'
+}
 ```
 
-If the user toggles the checkbox and calls `setIsMoon(true)`, the `useFetchedList` Hook will receive the `fetchMoonCountries` function rather than the `fetchEarthCountries` function as the `fetchList` argument. If you didn't include `fetchList` in the dependencies (which the linter makes you do), then this component would get "stuck" showing the Earth countries even after you've selected the Moon.
+Abstractions like `useMount` above make your code fragile and don't fit well with React's paradigm. For example, if you used this `useMount` Hook instead of a raw `useEffect` in the earlier [chat room example](#effects-run-whenever-synchronization-is-needed), the linter wouldn't be to find the mistake in your code when you forgot to "react" to `roomId` changes.
 
-However, there is a pitfall. If you pass an *inline function* to `useFetchedList`, it will enter an infinite loop:
+Similarly, if you alias the `useEffect(fn, [])` pattern with a "nicer" name like `useEffectOnce`, React's [remounting components in development](/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development) would make its name misleading. In general, if you find yourself trying to "work around" React's behavior in a custom Hook, it's time to pause and rethink the approach.
+
+If you're writing an Effect, start by using the idiomatic React API directly:
 
 ```js
-function ShippingForm() {
-  const cities = useFetchedList((c) => fetchCities(c), country);
+// ✅ Good: raw Effects separated by purpose
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    post('/analytics/event', { eventName: 'visit_chat', roomId });
+  }, [roomId]);
+
+  useEffect(() => {
+    const connection = createConnection();
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId]);
+
+  // ...
+}
 ```
 
-Unlike previously, where the `fetchList` function was always an import (which doesn't change over time), when you pass an inline function, it will be a different function on every render. As a result, each time the `ShippingForm` component re-renders, the `fetchList` dependency will re-trigger the Effect. This will keep repeating because the Effect will set the state, leading to another re-render, and so on.
+Later, you can extract custom Hooks for the application-level and domain-specific concepts:
 
-There are different ways you can solve this, depending on the API you prefer:
+```js
+// ✅ Great: raw Effects named after their purpose
+function ChatRoom({ roomId }) {
+  useImpressionLog('visit_chat', { roomId });
+  useChatRoom(roomId);
+  // ...
+}
+```
 
-* You could make `useFetchedList` take a URL like `'/api/cities'` instead of an async function.
-* You could warn in development if `useFetchedList` receives different functions over time.
-* You could wrap the `useFetchedList` definition into a function called `createFetchableList` that takes the `fetchList` function and returns a `useFetchedList` Hook *for that specific kind of list.* Then you would write code like `const useFetchCountries = createFetchableList(fetchCountries)` at the top level outside of your component. This would ensure that the fetching function never changes.
-
-You will learn more about how to safely call functions from Effects later on this page.
+But a raw `useEffect` is always better than using a low-level Effect-like custom Hook like `useMount`.
 
 </DeepDive>
 
