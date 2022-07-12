@@ -691,7 +691,7 @@ function ChatRoom({ roomId }) {
 
 Previously, `options` needed to be a dependency because it was declared directly in the component body. Now, your Effect *creates* the `options` object based on the `port` and `token` from the component body. This is why `port` and `token` must are dependencies now. Both `port` and `token` are [reactive values](#every-reactive-value-becomes-a-dependency). They could change over time, and then you would *want* the Effect to re-run. This is why declaring them as dependencies makes sense.
 
-### Strategy 3: Recreate the object from primitives {/*strategy-3-recreate-the-object-from-primitives*/}
+#### Strategy 3: Recreate the object from primitives {/*strategy-3-recreate-the-object-from-primitives*/}
 
 In the above example, both `port` and `token` are [primitive data types](https://developer.mozilla.org/en-US/docs/Glossary/Primitive). With primitive data types likes strings, numbers, and booleans, you don't need to worry about whether the value is *actually* different or accidentally different (like with objects). **Working with Effects is easier when you try to keep their dependencies primitive.**
 
