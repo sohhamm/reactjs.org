@@ -475,28 +475,23 @@ Custom Hooks also make it easier to replace your Effects later. For example, if 
 
 <DeepDive title="When is extracting a custom Hook a good idea?">
 
-Start by choosing your custom Hook's name. If you can't think of a good name, don't extract it.
+Start by choosing your custom Hook's name. If you struggle to pick a clear name, it might mean that your Effect is too coupled to the rest of your component's logic, and is not yet ready to be extracted.
 
-Ideally, the name should be clear enough that even a person who doesn't write code every day could have a good guess about what your custom Hook is doing, what information it takes, and what it returns:
+Ideally, your custom Hook's name should be clear enough that even a person who doesn't write code often could have a good guess about what your custom Hook does, what it takes, and what it returns:
 
 * ✅ `useData(url)`
 * ✅ `useImpressionLog(eventName, extraData)`
-* ✅ `useChatRoom(roomId)`
-* ✅ `useDropdown(items, selectedId)`
-* ✅ `useDarkMode()`
+* ✅ `useChatConnection(roomId)`
 
 When you synchronize with an external system, your custom Hook name may be more technical and use jargon specific to that system. It's good as long as it would be clear to a person familiar with that system:
 
-* ✅ `useSelector(selector)`
 * ✅ `useMediaQuery(query)`
 * ✅ `useSocket(url)`
 * ✅ `useIntersectionObserver(ref, options)`
-* ✅ `useBackboneModel(model)`
 
 **Keep custom Hooks focused on concrete high-level use cases.** Avoid creating and using custom "lifecycle" Hooks that act as alternatives and convenience wrappers for the `useEffect` API itself:
 
 * 🔴 `useMount(fn)`
-* 🔴 `useUnmount(fn)`
 * 🔴 `useEffectOnce(fn)`
 * 🔴 `useUpdateEffect(fn)`
 
@@ -550,13 +545,13 @@ Then, you can (but don't have to) extract custom Hooks for different high-level 
 ```js
 // ✅ Great: custom Hooks named after their purpose
 function ChatRoom({ roomId }) {
-  useChatRoom(roomId);
+  useChatConnection(roomId);
   useImpressionLog('visit_chat', { roomId });
   // ...
 }
 ```
 
-**A good custom Hook keeps the calling code declarative by constraining what it can do.** For example, `useChatRoom(roomId)` can only connect you to the chat room, while `useImpressionLog(eventName, extraData)` can only send an impression log to the analytics. If your custom Hook API doesn't constrain the use cases and is very abstract, in the long run it's likely to introduce more problems than it solves.
+**A good custom Hook keeps the calling code declarative by constraining what it can do.** For example, `useChatConnection(roomId)` can only connect you to the chat room, while `useImpressionLog(eventName, extraData)` can only send an impression log to the analytics. If your custom Hook API doesn't constrain the use cases and is very abstract, in the long run it's likely to introduce more problems than it solves.
 
 </DeepDive>
 
