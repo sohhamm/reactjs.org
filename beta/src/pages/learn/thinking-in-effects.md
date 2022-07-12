@@ -428,7 +428,7 @@ The final code is longer than the original, but splitting these Effects is still
 
 In the above example, deleting one Effect wouldn't break the other Effect's logic. This is a good indication that they synchronize different things, and so it made sense to split them up. On the other hand, if you split up a cohesive piece of logic into separate Effects, the code may look "cleaner" but will be [more difficult to maintain.](/learn/you-might-not-need-an-effect#chains-of-computations)
 
-### Wrapping an Effect into a custom Hook {/*wrapping-an-effect-into-a-custom-hook*/}
+#### Optional: Wrapping an Effect into a custom Hook {/*optional-wrapping-an-effect-into-a-custom-hook*/}
 
 In the above example, the two Effects are independent from each other but share a lot of repetitive code. This makes the component itself difficult to read. You have to pause to figure out what exactly each Effect does, and how the data flows into and out of each Effect. This is especially difficult when asynchronous logic is involved.
 
@@ -555,15 +555,212 @@ function ChatRoom({ roomId }) {
 
 </DeepDive>
 
-### Replacing objects and function dependencies with primitives {/*replacing-objects-and-function-dependencies-with-primitives*/}
+### Removing object dependencies {/*removing-object-dependencies*/}
 
-TODO
+Suppose you have a `ChatRoom` component. It contains the `message` state variable that you use to track the currently typed message in the chat input. There's also an Effect that connects you to the chat server:
 
-### Moving objects and functions outside the component {/*moving-objects-and-functions-outside-the-component*/}
+```js
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
 
-TODO
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId]); // ✅ All dependencies declared
 
-### Moving objects and functions inside the Effect {/*moving-objects-and-functions-inside-the-effect*/}
+  // ...
+}
+```
+
+Now you want to pass some extra options to the `createConnection()` call inside the Effect:
+
+```js {3-5,8,11}
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+  const options = { // 🔴 Problem: makes the Effect re-run every time
+    port: 12345,
+  };
+
+  useEffect(() => {
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, options]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+You've had to declare `options` as a dependency because it's used inside the Effect. However, this code doesn't work quite as you intended. With this code, whenever you type into the input (and the `message` state variable updates), the `ChatRoom` unnecessarily reconnects on every keystroke. Can you guess why this happens?
+
+**The problem with this code is that your Effect depends on an object which is different for every render.**
+
+Let's say that during the initial render, `roomId` is `"travel"`. The dependency array for the first render is:
+
+```js
+const options1 = { port: 12345 };
+const deps1 = ["travel", options1]; // Dependencies from the initial render
+```
+
+Then, you start typing into the input. This changes the `message` state variable and [triggers a re-render.](/learn/render-and-commit) On every re-render of the `ChatRoom` component, its component function re-runs. This time, the dependency array is:
+
+```js
+const options2 = { port: 12345 };
+const deps2 = ["travel", options2] // Dependencies from the re-render
+```
+
+Note that `options` is *not* a [state variable](/learn/state-a-components-memory) which get preserved between renders. It's a regular JavaScript variable. This is why it's created from scratch and set to a *completely new* `{ port: 12345 }` object every single time that it runs. React then compares each element in the `deps1` and `deps2` arrays using the [`Object.is`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/is) comparison:
+
+* `Object.is("travel", "travel")` is `true`. It is exactly the same string.
+* `Object.is(options1, options2)` is **`false`. They are different objects created during different renders.**
+
+Although the two `{ port: 12345 }` objects look the same in the code, [they are not the same object.](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_Objects#comparing_objects) This is why, if you use `options` as a dependency, React thinks this dependency has changed and always re-runs your Effect.
+
+#### Strategy 1: Move the object outside the component {/*strategy-1-move-the-object-outside-the-component*/}
+
+If your object doesn't depend on any data from the component, move it *outside* your component:
+
+```js {1-3,12}
+const options = { // ✅ Not a dependency
+  port: 12345,
+};
+
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+Notice that the `object` is not in the list of dependencies anymore. By moving it outside your component, you have "proven" to React that the `options` object doesn't depend on props, state, or context. In other words, it isn't [reactive](#every-reactive-value-becomes-a-dependency), and so there is no need for your Effect to "react" to it. It doesn't participate in the data flow.
+
+#### Strategy 2: Move the object inside the Effect {/*strategy-2-move-the-object-inside-the-effect*/}
+
+You can't place the object outside if depends on some information from props, state, or context. For example, suppose that the `options` object contains information from the context which could change over time:
+
+```js {3-10,16}
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+  const { port } = useContext(SettingsContext);
+  const { token } = useContext(AuthContext);
+  const options = { // 🔴 Problem: makes the Effect re-run every time
+    port: port,
+    auth: {
+      token: token
+    }
+  };
+
+  useEffect(() => {
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, options]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+Now you have the same problem again. Every time the `message` changes, the entire `options` object gets re-created, and since it's different on every render, the Effect will re-run and unnecessarily reconnect to the server.
+
+**In this example, the correct solution is to move the object *inside* the Effect itself:**
+
+```js {7-12,16}
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+  const { port } = useContext(SettingsContext);
+  const { token } = useContext(AuthContext);
+
+  useEffect(() => {
+    const options = { // ✅ Not a dependency
+      port: port,
+      auth: {
+        token: token
+      }
+    };
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, port, token]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+Previously, `options` needed to be a dependency because it was declared directly in the component body. Now, your Effect *creates* the `options` object based on the `port` and `token` from the component body. This is why `port` and `token` must are dependencies now. Both `port` and `token` are [reactive values](#every-reactive-value-becomes-a-dependency). They could change over time, and then you would *want* the Effect to re-run. This is why declaring them as dependencies makes sense.
+
+### Strategy 3: Recreate the object from primitives {/*strategy-3-recreate-the-object-from-primitives*/}
+
+In the above example, both `port` and `token` are [primitive data types](https://developer.mozilla.org/en-US/docs/Glossary/Primitive). With primitive data types likes strings, numbers, and booleans, you don't need to worry about whether the value is *actually* different or accidentally different (like with objects). **Working with Effects is easier when you try to keep their dependencies primitive.**
+
+Let's say you receive the whole `options` object as a prop:
+
+```js {1,8}
+function ChatRoom({ roomId, options }) { // Unclear: Could be a new object every time
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, options]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+You can't know whether the parent component will pass an `options` object that's "stable" (i.e. does not change between re-renders) or if it's going to create a completely different object every time that it re-renders.
+
+To avoid relying on the parent component's behavior, you can create the `options` object *inside* the Effect:
+
+```js {1,5-10,14}
+function ChatRoom({ roomId, port, token }) { // Primitive props
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const options = { // ✅ Not a dependency
+      port: port,
+      auth: {
+        token: token
+      }
+    };
+    const connection = createConnection(roomId, options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, port, token]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+Now `options` is created inside the Effect, so it's not a dependency. Both `port` and `token` are dependencies, but they're primitive so you can be confident that if they change, the Effect *definitely* needs to re-run.
+
+In the above example, the `ChatRoom` component accepts the `port` and `token` props directly. If you prefer a single `options` prop, you can read the primitives out of it and reassemble them into an object inside the Effect:
+
+```js {1,4,5,8-13}
+function ChatRoom({ roomId, options }) {
+  const [message, setMessage] = useState('');
+
+  const port = options.port;
+  const token = options.auth.token;
+
+  useEffect(() => {
+    const connection = createConnection(roomId, { // ✅ Not a dependency
+      port: port,
+      auth: {
+        token: token
+      }
+    });
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, port, token]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+However, using primitive values for props has advantages--for example, it makes rendering optimizations easier. Although you don't *have to* use primitive values for props or dependencies, in most cases it's worth considering.
+
+### Removing function dependencies {/*removing-function-dependencies*/}
 
 TODO
 
