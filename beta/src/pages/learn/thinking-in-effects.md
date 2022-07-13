@@ -385,7 +385,7 @@ However, since the Effect now uses the `city` state variable, you've had to add 
 
 Split the logic into two Effects, each of which reacts to the prop that it needs to synchronize with:
 
-```js {19-32}
+```js {19-33}
 function ShippingForm({ country }) {
   const [cities, setCities] = useState(null);
   useEffect(() => {
@@ -406,6 +406,7 @@ function ShippingForm({ country }) {
   const [areas, setAreas] = useState(null);
   useEffect(() => {
     if (city) {
+      let ignore = false;
       fetch(`/api/areas?city=${city}`)
         .then(response => response.json())
         .then(json => {
@@ -413,10 +414,10 @@ function ShippingForm({ country }) {
             setAreas(json);
           }
         });
+      return () => {
+        ignore = true;
+      };
     }
-    return () => {
-      ignore = true;
-    };
   }, [city]); // ✅ All dependencies declared
 
   // ...
