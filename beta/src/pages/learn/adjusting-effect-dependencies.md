@@ -808,9 +808,9 @@ function ChatRoom({ roomId, authenticatorRef }) {
 }
 ```
 
-Now even if the parent `ChatPage` component re-renders, the Effect inside the child `ChatRoom` won't re-run. This is because this Effect does *not* depend on the `authenticator` object itself. It depends on the [ref object](/apis/useref), which is a wrapper that you manage manually using its `current` property. The ref object *itself* is guaranteed by React to be the same between re-renders. It is a dependency, but it *never changes*--so it doesn't re-run the Effect.
+Even if the parent `ChatPage` component re-renders, the Effect inside the child `ChatRoom` won't re-run. Your Effect depends on the [ref object](/apis/useref), which is a wrapper object provided by React. It is guaranteed by React to be the same between re-renders. Although it's a dependency, it *never changes*--so it doesn't re-run the Effect.
 
-With this approach, the Effect always reads the current authenticator object. Your parent `ChatPage` component [initializes it once](/apis/useref#avoiding-recreating-the-ref-contents), so it'll read the same object every time. However, if you manually changed the `current` property, the Effect still wouldn't re-run. This is why if you want to reconnect to the chat when it changes--for example, if the user can pick the authentication method--you'd have to keep `authenticator` in state instead.
+**Only use this approach for values that don't participate in rendering and that should never re-run the Effect.** Changing a ref [doesn't trigger a re-render](/learn/referencing-values-with-refs), so even if you *wanted* to change `authenticatorRef.current` later, it would not make the Effect re-run. If you want to reconnect to the chat when this object changes--for example, if the user can pick the authentication method--you should keep `authenticator` in state instead.
 
 #### Solution 5: Hold the object in state {/*solution-5-hold-the-object-in-state*/}
 
