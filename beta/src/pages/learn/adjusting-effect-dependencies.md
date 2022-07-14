@@ -815,8 +815,8 @@ Here, the `ChatPage` holds an `authenticator` object in state and changes it onl
 function ChatPage({ roomId }) {
   const [authenticator, setAuthenticator] = useState(() => createAuthenticator('end-to-end'));
 
-  function handleChangeMode(authorizationMode) {
-    setAuthenticator(createAuthenticator(authorizationMode));
+  function handleChangeMode(autenticationMode) {
+    setAuthenticator(createAuthenticator(autenticationMode));
   }
 
   return (
