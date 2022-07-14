@@ -843,7 +843,7 @@ function ChatRoom({ roomId, authenticator }) {
 }
 ```
 
-When a different `authenticator` value is passed down, your Effect will re-run. **Since it's only being set in the event handlers (and not during rendering), it won't change unintentionally.** However, you need to be careful and always pass down the value that you hold in state in the parent component. If you create the `authenticator` value during rendering and then specify it as a dependency of this Effect, it will re-run after every render.
+When a different `authenticator` value is passed down, your Effect will re-run. **Since it's only created inside the event handlers (and not during rendering), it won't change unintentionally.** However, you need to be careful and always pass down the value that you hold in state in the parent component. If you create the `authenticator` value during rendering and then specify it as a dependency of this Effect, it will re-run after every render.
 
 ### Removing function dependencies {/*removing-function-dependencies*/}
 
