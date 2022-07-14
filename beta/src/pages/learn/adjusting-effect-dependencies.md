@@ -467,12 +467,7 @@ function ShippingForm({ country }) {
   // ...
 ```
 
-Custom Hooks like `useData` make your components easier to read and maintain:
-
-- **Custom Hooks lets you emphasize the intent.** When your component body contained several raw Effects, it was tricky to tell at a glance how the data flowed in and out. Now that the logic is in the `useData` Hook, you can "forget" how it works and treat it as a black box: you feed the `url` in, and you get the `data` out.
-- **You can reuse custom Hooks between components.** As you create more app-specific custom Hooks or import them from the community packages, you won't need to write Effects in your components as often.
-
-Custom Hooks also make it easier to replace your Effects later. For example, if you decide to switch to a more efficient data fetching solution, it's less work to migrate from a Hook like `useData` than from the raw `useEffect` scattered across many different components. [Read more about data fetching with Effects and the alternatives.](/learn/you-might-not-need-an-effect#fetching-data)
+When your Effect was doing multiple unrelated things, it was hard to tell at a glance how the data flowed in and out. After you've split it, the data flow became easier to follow. Extracting a custom Hook makes the data flow even more explicit: you feed the `url` in and you get the `data` out. **Custom Hooks let your components stay focused on the *intent* of your code rather than the implementation.** For example, if you later want to switch to a more efficient data fetching solution, it's easier to migrate from a Hook like `useData` than from raw `useEffect` calls across many different components. [Read more about data fetching with Effects and the alternatives.](/learn/you-might-not-need-an-effect#fetching-data)
 
 <DeepDive title="When is extracting a custom Hook a good idea?">
 
