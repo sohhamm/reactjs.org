@@ -1,5 +1,5 @@
 ---
-title: 'Thinking in Effects'
+title: 'Adjusting Effect Dependencies'
 ---
 
 <Intro>
@@ -27,7 +27,7 @@ Event handlers and Effects [serve different purposes.](/learn/synchronizing-with
 
 **In other words, Effects are _reactive._** They "react" to the values from the component body (like props and state). This might remind you of how React always keeps the UI synchronized to the current props and state of your component. By writing Effects, you teach React to synchronize *other* systems to the current props and state.
 
-**Writing reactive code like Effects requires a different mindset.** The most common problem you'll run into is that your Effect re-runs too often because a dependency you use inside of it changes too often. Your first instinct might be to omit that dependency from the list, but that's wrong. What you need to do in these cases is to edit the *rest* of the code to *not need* that dependency. On this page, you'll learn the most common ways to do that.
+**Writing reactive code like Effects requires a different mindset.** The most common problem you'll run into is that your Effect re-runs too often because a dependency you use inside of it changes too often. Your first instinct might be to omit that dependency from the list, but that's wrong. In these cases, you need to edit the *code itself* (rather than the list) to not *need* that dependency. On this page, you'll learn the most common ways to do that.
 
 ### Event handlers run on specific interactions {/*event-handlers-run-on-specific-interactions*/}
 
@@ -178,7 +178,7 @@ Now, your Effect will re-run more often. It will re-run not only when the user s
 
 <DeepDive title="What kind of values can be dependencies?">
 
-Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as props, state, context, and other variables that are directly inside the component and are used by the Effect:
+Only values that participate in the rendering data flow--and therefore could change over time--are dependencies. This includes every value that's defined **directly inside the component**, such as [props](/learn/passing-props-to-a-component), [state](/learn/state-a-components-memory), [context](/learn/passing-data-deeply-with-context), and other variables that are directly inside the component and are used by the Effect:
 
 ```js
 // 🔴 Variables outside the component can't be dependencies
@@ -617,7 +617,7 @@ Note that `options` is *not* a [state variable](/learn/state-a-components-memory
 
 Although the two `{ port: 12345 }` objects look the same in the code, [they are not the same object.](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_Objects#comparing_objects) This is why, if you use `options` as a dependency, React thinks this dependency has changed and always re-runs your Effect.
 
-#### Strategy 1: Move the object outside the component {/*strategy-1-move-the-object-outside-the-component*/}
+#### Solution 1: Move the object outside the component {/*solution-1-move-the-object-outside-the-component*/}
 
 If your object doesn't depend on any data from the component, move it *outside* your component:
 
@@ -640,7 +640,7 @@ function ChatRoom({ roomId }) {
 
 Notice that the `object` is not in the list of dependencies anymore. By moving it outside your component, you have "proven" to React that the `options` object doesn't depend on props, state, or context. In other words, it isn't [reactive](#every-reactive-value-becomes-a-dependency), and so there is no need for your Effect to "react" to it. It doesn't participate in the data flow.
 
-#### Strategy 2: Move the object inside the Effect {/*strategy-2-move-the-object-inside-the-effect*/}
+#### Solution 2: Move the object inside the Effect {/*solution-2-move-the-object-inside-the-effect*/}
 
 You can't place the object outside if depends on some information from props, state, or context. For example, suppose that the `options` object contains information from the context which could change over time:
 
@@ -665,7 +665,7 @@ function ChatRoom({ roomId }) {
 }
 ```
 
-Now you have the same problem again. Every time the `message` changes, the entire `options` object gets re-created, and since it's different on every render, the Effect will re-run and unnecessarily reconnect to the server.
+This code has the same issue as [the first example.](#removing-object-dependencies) When the `message` changes, the `options` object gets re-created. Since it's different on every render, the Effect will re-run and reconnect to the server on every keystroke.
 
 **In this example, the correct solution is to move the object *inside* the Effect itself:**
 
@@ -692,7 +692,9 @@ function ChatRoom({ roomId }) {
 
 Previously, `options` needed to be a dependency because it was declared directly in the component body. Now, your Effect *creates* the `options` object based on the `port` and `token` from the component body. This is why `port` and `token` must be dependencies now. Both `port` and `token` are [reactive values](#every-reactive-value-becomes-a-dependency). They could change over time, and then you would *want* the Effect to re-run. This is why declaring them as dependencies makes sense.
 
-#### Strategy 3: Recreate the object from primitives {/*strategy-3-recreate-the-object-from-primitives*/}
+Since the `options` object is no longer a dependency, it doesn't make the Effect re-run unnecessarily.
+
+#### Solution 3: Recreate the object from primitives {/*solution-3-recreate-the-object-from-primitives*/}
 
 In the above example, both `port` and `token` are [primitive data types](https://developer.mozilla.org/en-US/docs/Glossary/Primitive). With primitive data types likes strings, numbers, and booleans, you don't need to worry about whether the value is *actually* different or accidentally different (like with objects). **Working with Effects is easier when you try to keep their dependencies primitive.**
 
@@ -713,7 +715,7 @@ function ChatRoom({ roomId, options }) { // Unclear: Could be a new object every
 
 You can't know whether the parent component will pass an `options` object that's "stable" (i.e. does not change between re-renders) or if it's going to create a completely different object every time that it re-renders.
 
-To avoid relying on the parent component's behavior, you can create the `options` object *inside* the Effect:
+Instead of accepting `options` as a prop, change your component to accept primitive props like `port` and `token`. Then, if you still need to create an `options` object to pass it to `createConnection()`, do this *inside* your Effect:
 
 ```js {1,5-10,14}
 function ChatRoom({ roomId, port, token }) { // Primitive props
@@ -736,30 +738,117 @@ function ChatRoom({ roomId, port, token }) { // Primitive props
 
 Now `options` is created inside the Effect, so it's not a dependency. Both `port` and `token` are dependencies, but they're primitive so you can be confident that if they change, the Effect *definitely* needs to re-run.
 
-In the above example, the `ChatRoom` component accepts the `port` and `token` props directly. If you prefer a single `options` prop, you can read the primitives out of it and reassemble them into an object inside the Effect:
+In the above example, the `ChatRoom` component accepts the `port` and `token` props directly. If you prefer a single `options` prop, you can read the primitives out of it so that the Effect can depend on the `port` and `token`:
 
-```js {1,4,5,8-13}
+```js {1,4,5}
 function ChatRoom({ roomId, options }) {
   const [message, setMessage] = useState('');
 
   const port = options.port;
   const token = options.auth.token;
 
+  // ...
+```
+
+However, primitive props are often easier to work with, so you should consider that first.
+
+#### Solution 4: Wrap the object into a ref {/*solution-4-wrap-the-object-into-a-ref*/}
+
+In this example, the Effect depends on an `authenticator` object that's created on every render:
+
+```js {4,7,10}
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+
+  const authenticator = createAuthenticator(); // 🔴 Problem: makes the Effect re-run every time
+
   useEffect(() => {
-    const connection = createConnection(roomId, { // ✅ Not a dependency
-      port: port,
-      auth: {
-        token: token
-      }
-    });
+    const connection = createConnection(roomId, authenticator);
     connection.connect();
     return () => connection.disconnect();
-  }, [roomId, port, token]); // ✅ All dependencies declared
+  }, [roomId, authenticator]); // ✅ All dependencies declared
   // ...
 }
 ```
 
-However, using primitive values for props has advantages--for example, it makes rendering optimizations easier. Although you don't *have to* use primitive values for props or dependencies, in most cases it's worth considering.
+Like earlier, this causes the Effect to reconnect to the chat whenever this component re-renders.
+
+The first solution you can try is to move `createAuthenticator()` call *inside* the Effect, like in [the earlier example](#solution-2-move-the-object-inside-the-effect). However, let's say your `ChatRoom` component wants to let the parent component configure the `authenticator`. **If its value never changes, [hold it in a ref](/learn/referencing-values-with-refs) inside the parent component and pass that ref down to `ChatRoom`:**
+
+```js {2-5,10}
+function ChatPage({ roomId }) {
+  const authenticatorRef = useRef(null);
+  if (authenticatorRef.current === null) { // Create the value once and reuse it for the whole lifetime
+    authenticatorRef.current = createAuthenticator();
+  }
+
+  return (
+    <ChatRoom
+      roomId={roomId}
+      authenticatorRef={authenticatorRef} 
+    />
+  );
+}
+```
+
+Then, in the `ChatRoom` component, read the `authenticator` object from that ref *inside* the Effect:
+
+
+```js {1,5,9}
+function ChatRoom({ roomId, authenticatorRef }) {
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const authenticator = authenticatorRef.current;
+    const connection = createConnection(roomId, authenticator);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, authenticatorRef]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+Now even if the parent `ChatPage` component re-renders, the Effect inside the child `ChatRoom` won't re-run. This is because this Effect does *not* depend on the `authenticator` object itself. It depends on the [ref object](/apis/useref), which is a wrapper that you manage manually using its `current` property. The ref object *itself* is guaranteed by React to be the same between re-renders. It is a dependency, but it *never changes*--so it doesn't re-run the Effect.
+
+With this approach, the Effect always reads the current authenticator object. Your parent `ChatPage` component [initializes it once](/apis/useref#avoiding-recreating-the-ref-contents), so it'll read the same object every time. However, if you manually changed the `current` property, the Effect still wouldn't re-run. This is why if you want to reconnect to the chat when it changes--for example, if the user can pick the authentication method--you'd have to keep `authenticator` in state instead.
+
+#### Solution 5: Hold the object in state {/*solution-5-hold-the-object-in-state*/}
+
+Here, the `ChatPage` holds an `authenticator` object in state and changes it only in response to interactions:
+
+```js {2,5,11}
+function ChatPage({ roomId }) {
+  const [authenticator, setAuthenticator] = useState(() => createAuthenticator('end-to-end'));
+
+  function handleChangeMode(authorizationMode) {
+    setAuthenticator(createAuthenticator(authorizationMode));
+  }
+
+  return (
+    <>
+      <ModePicker onChange={handleChangeMode} />
+      <ChatRoom roomId={roomId} authenticator={authenticator}  />
+    </>
+  );
+}
+```
+
+This ensures that the `authenticator` object will never be *accidentally* different, so the Effect can depend on it:
+
+```js {1,5,8}
+function ChatRoom({ roomId, authenticator }) {
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const connection = createConnection(roomId, authenticator);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, authenticator]); // ✅ All dependencies declared
+  // ...
+}
+```
+
+When a different `authenticator` value is passed down, your Effect will re-run. **Since it's only being set in the event handlers (and not during rendering), it won't change unintentionally.** However, you need to be careful and always pass down the value that you hold in state in the parent component. If you create the `authenticator` value during rendering and then specify it as a dependency of this Effect, it will re-run after every render.
 
 ### Removing function dependencies {/*removing-function-dependencies*/}
 

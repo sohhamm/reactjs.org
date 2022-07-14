@@ -172,8 +172,8 @@
               "path": "/learn/you-might-not-need-an-effect"
             },
             {
-              "title": "Thinking in Effects",
-              "path": "/learn/thinking-in-effects"
+              "title": "Adjusting Effect Dependencies",
+              "path": "/learn/adjusting-effect-dependencies"
             }
           ]
         }
