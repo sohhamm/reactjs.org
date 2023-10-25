@@ -33,7 +33,7 @@
     "debounce": "^1.2.1",
     "ga-lite": "^2.1.4",
     "github-slugger": "^1.3.0",
-    "next": "12.1.7-canary.11",
+    "next": "13.5.0",
     "parse-numeric-range": "^1.2.0",
     "react": "0.0.0-experimental-82c64e1a4-20220520",
     "react-collapsed": "3.1.0",
